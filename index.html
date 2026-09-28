@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="体温计">
+<meta name="theme-color" content="#667eea">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%23667eea'/%3E%3Cstop offset='100%25' style='stop-color:%23764ba2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='180' height='180' rx='40' fill='url(%23g)'/%3E%3Cpath d='M90 28c-7.5 0-13 5.5-13 13v73c-9.5 5-16 14-16 26 0 16 13 29 29 29s29-13 29-29c0-12-6.5-21-16-26V41c0-7.5-5.5-13-13-13z' fill='white' opacity='0.95'/%3E%3Ccircle cx='90' cy='128' r='13' fill='%23f44336'/%3E%3Crect x='84' y='54' width='12' height='62' rx='6' fill='%23f44336'/%3E%3C/svg%3E">
+<title>电子体温计 - 蓝牙数据读取</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: #333;
+    padding: 20px 16px;
+  }
+  .container {
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .card {
+    background: #fff;
+    border-radius: 20px;
+    padding: 24px;
+    margin-bottom: 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  }
+  h1 {
+    text-align: center;
+    color: #fff;
+    font-size: 22px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+  }
+  .temp-display {
+    text-align: center;
+    padding: 30px 20px;
+  }
+  .temp-label {
+    font-size: 14px;
+    color: #999;
+    margin-bottom: 8px;
+  }
+  .temp-value {
+    font-size: 72px;
+    font-weight: 300;
+    color: #333;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .temp-value .unit {
+    font-size: 32px;
+    color: #999;
+    margin-left: 4px;
+  }
+  .temp-value.normal { color: #4caf50; }
+  .temp-value.fever { color: #f44336; }
+  .temp-time {
+    font-size: 13px;
+    color: #bbb;
+    margin-top: 8px;
+  }
+  .status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 10px;
+    font-size: 14px;
+    margin-bottom: 16px;
+  }
+  .status-bar.disconnected { background: #ffebee; color: #c62828; }
+  .status-bar.connecting { background: #fff3e0; color: #e65100; }
+  .status-bar.connected { background: #e8f5e9; color: #2e7d32; }
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .status-bar.connecting .status-dot { animation: pulse 1s infinite; }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    -webkit-appearance: none;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+  }
+  .btn-primary:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .btn-danger {
+    background: #f44336;
+    color: #fff;
+  }
+  .btn-secondary {
+    background: #f5f5f5;
+    color: #666;
+  }
+  .btn-group {
+    display: flex;
+    gap: 10px;
+  }
+  .btn-group .btn { flex: 1; }
+  .section-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: #333;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .section-title::before {
+    content: '';
+    width: 4px;
+    height: 16px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 2px;
+  }
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 14px;
+  }
+  .info-row:last-child { border-bottom: none; }
+  .info-label { color: #999; }
+  .info-value { color: #333; font-weight: 500; word-break: break-all; text-align: right; max-width: 60%; }
+  .history-list {
+    max-height: 240px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid #f5f5f5;
+  }
+  .history-item:last-child { border-bottom: none; }
+  .history-temp {
+    font-size: 18px;
+    font-weight: 500;
+    color: #333;
+  }
+  .history-temp.fever { color: #f44336; }
+  .history-time {
+    font-size: 12px;
+    color: #bbb;
+  }
+  .history-empty {
+    text-align: center;
+    color: #ccc;
+    padding: 30px 0;
+    font-size: 14px;
+  }
+  .settings-form label {
+    display: block;
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 6px;
+    margin-top: 12px;
+  }
+  .settings-form label:first-child { margin-top: 0; }
+  .settings-form input, .settings-form select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    font-size: 14px;
+    background: #fafafa;
+    -webkit-appearance: none;
+  }
+  .settings-form input:focus, .settings-form select:focus {
+    outline: none;
+    border-color: #667eea;
+    background: #fff;
+  }
+  .mode-switch {
+    display: flex;
+    background: #f5f5f5;
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 8px;
+  }
+  .mode-switch button {
+    flex: 1;
+    padding: 8px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #666;
+    cursor: pointer;
+    -webkit-appearance: none;
+  }
+  .mode-switch button.active {
+    background: #fff;
+    color: #667eea;
+    font-weight: 500;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .log-panel {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 10px;
+    padding: 12px;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+    line-height: 1.5;
+    -webkit-overflow-scrolling: touch;
+  }
+  .log-item { margin-bottom: 4px; word-break: break-all; }
+  .log-item.info { color: #4fc3f7; }
+  .log-item.success { color: #81c784; }
+  .log-item.error { color: #e57373; }
+  .log-item.warn { color: #ffb74d; }
+  .hint {
+    text-align: center;
+    color: rgba(255,255,255,0.8);
+    font-size: 12px;
+    margin-top: 16px;
+    line-height: 1.6;
+  }
+  .hint a { color: #fff; text-decoration: underline; }
+  .toggle-header {
+    cursor: pointer;
+    user-select: none;
+  }
+  .toggle-icon {
+    margin-left: auto;
+    transition: transform 0.2s;
+    font-size: 14px;
+    color: #999;
+  }
+  .toggle-icon.open { transform: rotate(180deg); }
+  .collapsible {
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+  }
+  .collapsible.closed { max-height: 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🌡️ 蓝牙电子体温计</h1>
+
+  <!-- 状态栏 -->
+  <div class="status-bar disconnected" id="statusBar">
+    <div class="status-dot"></div>
+    <span id="statusText">未连接</span>
+  </div>
+
+  <!-- 温度显示卡片 -->
+  <div class="card">
+    <div class="temp-display">
+      <div class="temp-label">当前温度</div>
+      <div class="temp-value normal" id="tempValue">
+        --.-<span class="unit">°C</span>
+      </div>
+      <div class="temp-time" id="tempTime">等待连接设备...</div>
+    </div>
+  </div>
+
+  <!-- 连接控制卡片 -->
+  <div class="card">
+    <div class="section-title">设备连接</div>
+    <button class="btn btn-primary" id="connectBtn" onclick="connectDevice()">
+      🔍 扫描并连接体温计
+    </button>
+    <div style="height: 10px;"></div>
+    <button class="btn btn-danger" id="disconnectBtn" onclick="disconnectDevice()" disabled>
+      断开连接
+    </button>
+  </div>
+
+  <!-- 设备信息卡片 -->
+  <div class="card" id="deviceInfoCard" style="display:none;">
+    <div class="section-title">设备信息</div>
+    <div class="info-row">
+      <span class="info-label">设备名称</span>
+      <span class="info-value" id="deviceName">--</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">设备ID</span>
+      <span class="info-value" id="deviceId">--</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">电池电量</span>
+      <span class="info-value" id="batteryLevel">--</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">测量部位</span>
+      <span class="info-value" id="tempType">--</span>
+    </div>
+  </div>
+
+  <!-- 历史记录卡片 -->
+  <div class="card">
+    <div class="section-title" style="justify-content: space-between;">
+      <span style="display:flex;align-items:center;gap:8px;">
+        <span style="width:4px;height:16px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:2px;"></span>
+        温度记录
+      </span>
+      <button class="btn btn-secondary" style="width:auto;padding:6px 12px;font-size:12px;" onclick="clearHistory()">清空</button>
+    </div>
+    <div class="history-list" id="historyList">
+      <div class="history-empty">暂无记录</div>
+    </div>
+  </div>
+
+  <!-- 设置卡片 -->
+  <div class="card">
+    <div class="section-title toggle-header" onclick="toggleSettings()">
+      <span style="display:flex;align-items:center;gap:8px;">
+        <span style="width:4px;height:16px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:2px;"></span>
+        高级设置
+      </span>
+      <span class="toggle-icon" id="settingsToggleIcon">▼</span>
+    </div>
+    <div class="collapsible closed" id="settingsPanel">
+      <div style="height: 12px;"></div>
+      <div class="mode-switch">
+        <button class="active" id="modeStandard" onclick="setMode('standard')">标准服务</button>
+        <button id="modeCustom" onclick="setMode('custom')">自定义UUID</button>
+      </div>
+      <div class="settings-form">
+        <div id="standardSettings">
+          <label>服务UUID</label>
+          <input type="text" id="serviceUuid" value="health_thermometer" placeholder="如: health_thermometer 或 00001809-0000-1000-8000-00805f9b34fb">
+          <label>特征UUID（温度值）</label>
+          <input type="text" id="charUuid" value="temperature_measurement" placeholder="如: temperature_measurement 或 00002A1C-...">
+          <label>数据格式</label>
+          <select id="dataFormat">
+            <option value="ieee11073">IEEE 11073 标准（0x2A1C）</option>
+            <option value="float32_le">Float32 小端序</option>
+            <option value="float32_be">Float32 大端序</option>
+            <option value="uint16_le_10">UInt16 小端序 / 10</option>
+            <option value="uint16_be_10">UInt16 大端序 / 10</option>
+            <option value="uint16_le_100">UInt16 小端序 / 100</option>
+            <option value="int16_le_10">Int16 小端序 / 10</option>
+          </select>
+          <label>通知类型</label>
+          <select id="notifyType">
+            <option value="indicate">Indicate（指示）</option>
+            <option value="notify">Notify（通知）</option>
+          </select>
+        </div>
+      </div>
+      <div style="height: 8px;"></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#666;">
+        <input type="checkbox" id="autoReconnect" checked style="width:auto;">
+        断开后自动重连
+      </label>
+    </div>
+  </div>
+
+  <!-- 日志卡片 -->
+  <div class="card">
+    <div class="section-title toggle-header" onclick="toggleLog()">
+      <span style="display:flex;align-items:center;gap:8px;">
+        <span style="width:4px;height:16px;background:linear-gradient(135deg,#667eea,#764ba2);border-radius:2px;"></span>
+        调试日志
+      </span>
+      <span class="toggle-icon" id="logToggleIcon">▼</span>
+    </div>
+    <div class="collapsible closed" id="logPanel">
+      <div style="height: 12px;"></div>
+      <div class="log-panel" id="logPanelInner">
+        <div class="log-item info">📋 日志已就绪</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint">
+    💡 iOS 用户请使用 <strong>Bluefy</strong> 浏览器打开<br>
+    安卓/桌面用户请使用 Chrome 浏览器
+  </div>
+</div>
+
+<script>
+// ========== 全局变量 ==========
+let bleDevice = null;
+let tempCharacteristic = null;
+let batteryCharacteristic = null;
+let isConnected = false;
+let autoReconnect = true;
+let reconnectTimer = null;
+let history = [];
+let currentMode = 'standard';
+
+// ========== 工具函数 ==========
+function log(msg, type = 'info') {
+  const panel = document.getElementById('logPanelInner');
+  const item = document.createElement('div');
+  item.className = 'log-item ' + type;
+  const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+  item.textContent = `[${time}] ${msg}`;
+  panel.appendChild(item);
+  panel.scrollTop = panel.scrollHeight;
+  console.log('[BLE]', msg);
+}
+
+function setStatus(status, text) {
+  const bar = document.getElementById('statusBar');
+  bar.className = 'status-bar ' + status;
+  document.getElementById('statusText').textContent = text;
+}
+
+function updateConnectButton(connected) {
+  document.getElementById('connectBtn').disabled = connected;
+  document.getElementById('disconnectBtn').disabled = !connected;
+}
+
+// IEEE 11073 32-bit float 解析（标准 Health Thermometer）
+function parseIEEE11073Float(dataView, offset) {
+  const raw = dataView.getInt32(offset, true); // 小端序
+  const mantissa = raw & 0x00ffffff;
+  let exponent = raw >> 24;
+  // 有符号扩展
+  if (exponent > 127) exponent -= 256;
+  // 处理 NaN / 无穷等特殊值
+  if (mantissa === 0x007fffff) return NaN; // NaN
+  if (mantissa === 0x00800000) return Infinity; // +Infinity
+  // 24位有符号尾数
+  let mantissaSigned = mantissa;
+  if (mantissa & 0x00800000) mantissaSigned = -(0x01000000 - mantissa);
+  return mantissaSigned * Math.pow(10, exponent);
+}
+
+// 温度类型映射
+const tempTypeMap = {
+  0: '未知',
+  1: '腋下',
+  2: '身体（通用）',
+  3: '耳内',
+  4: '手指',
+  5: '肠胃',
+  6: '口腔',
+  7: '直肠',
+  8: '前额'
+};
+
+// ========== 温度解析 ==========
+function parseTemperature(dataView) {
+  const format = document.getElementById('dataFormat').value;
+  let temp = 0;
+  let unit = '°C';
+  let type = null;
+
+  if (format === 'ieee11073') {
+    // 标准 Health Thermometer Measurement (0x2A1C)
+    const flags = dataView.getUint8(0);
+    const isFahrenheit = flags & 0x01;
+    const hasTimestamp = flags & 0x02;
+    const hasType = flags & 0x04;
+    unit = isFahrenheit ? '°F' : '°C';
+    temp = parseIEEE11073Float(dataView, 1);
+    let offset = 5;
+    if (hasTimestamp) offset += 7; // 跳过时间戳 (7字节)
+    if (hasType) {
+      const typeCode = dataView.getUint8(offset);
+      type = tempTypeMap[typeCode] || '未知';
+    }
+  } else if (format === 'float32_le') {
+    temp = dataView.getFloat32(0, true);
+  } else if (format === 'float32_be') {
+    temp = dataView.getFloat32(0, false);
+  } else if (format === 'uint16_le_10') {
+    temp = dataView.getUint16(0, true) / 10;
+  } else if (format === 'uint16_be_10') {
+    temp = dataView.getUint16(0, false) / 10;
+  } else if (format === 'uint16_le_100') {
+    temp = dataView.getUint16(0, true) / 100;
+  } else if (format === 'int16_le_10') {
+    temp = dataView.getInt16(0, true) / 10;
+  }
+
+  return { temp: isNaN(temp) ? 0 : temp, unit, type };
+}
+
+// ========== 温度显示与记录 ==========
+function updateTemperatureDisplay(temp, unit) {
+  const tempEl = document.getElementById('tempValue');
+  const isFever = (unit === '°C' && temp >= 37.3) || (unit === '°F' && temp >= 99.1);
+  tempEl.className = 'temp-value ' + (isFever ? 'fever' : 'normal');
+  tempEl.innerHTML = `${temp.toFixed(1)}<span class="unit">${unit}</span>`;
+  
+  const now = new Date();
+  const timeStr = now.toLocaleString('zh-CN', { 
+    month: '2-digit', day: '2-digit', 
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+    hour12: false 
+  });
+  document.getElementById('tempTime').textContent = '最后更新：' + timeStr;
+
+  // 添加到历史记录
+  addHistory(temp, unit, now);
+}
+
+function addHistory(temp, unit, date) {
+  history.unshift({ temp, unit, date: date.getTime() });
+  if (history.length > 50) history.pop();
+  renderHistory();
+  saveHistory();
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  if (history.length === 0) {
+    list.innerHTML = '<div class="history-empty">暂无记录</div>';
+    return;
+  }
+  list.innerHTML = history.map(item => {
+    const d = new Date(item.date);
+    const timeStr = d.toLocaleString('zh-CN', { 
+      month: '2-digit', day: '2-digit', 
+      hour: '2-digit', minute: '2-digit',
+      hour12: false 
+    });
+    const isFever = (item.unit === '°C' && item.temp >= 37.3) || (item.unit === '°F' && item.temp >= 99.1);
+    return `
+      <div class="history-item">
+        <span class="history-temp ${isFever ? 'fever' : ''}">${item.temp.toFixed(1)} ${item.unit}</span>
+        <span class="history-time">${timeStr}</span>
+      </div>
+    `;
+  }).join('');
+}
+
+function saveHistory() {
+  try {
+    localStorage.setItem('thermometer_history', JSON.stringify(history));
+  } catch (e) {}
+}
+
+function loadHistory() {
+  try {
+    const data = localStorage.getItem('thermometer_history');
+    if (data) {
+      history = JSON.parse(data);
+      renderHistory();
+    }
+  } catch (e) {}
+}
+
+function clearHistory() {
+  if (history.length === 0) return;
+  if (confirm('确定要清空所有温度记录吗？')) {
+    history = [];
+    renderHistory();
+    saveHistory();
+  }
+}
+
+// ========== BLE 连接逻辑 ==========
+async function connectDevice() {
+  if (!navigator.bluetooth) {
+    alert('当前浏览器不支持 Web Bluetooth API。\n\niOS 用户请使用 Bluefy 浏览器\n安卓/桌面用户请使用 Chrome 浏览器');
+    log('浏览器不支持 Web Bluetooth', 'error');
+    return;
+  }
+
+  try {
+    setStatus('connecting', '正在扫描设备...');
+    log('开始扫描 BLE 设备...');
+
+    const serviceUuid = document.getElementById('serviceUuid').value.trim();
+    
+    // 构建过滤器
+    const options = {
+      acceptAllDevices: true,
+      optionalServices: []
+    };
+
+    // 如果用户填了服务UUID，就用过滤器
+    if (serviceUuid && serviceUuid !== '') {
+      const services = [serviceUuid];
+      // 顺便加上电池服务
+      services.push('battery_service');
+      options.filters = [{ services: services }];
+      delete options.acceptAllDevices;
+      options.optionalServices = [];
+      log('过滤服务: ' + serviceUuid);
+    }
+
+    bleDevice = await navigator.bluetooth.requestDevice(options);
+    log('选择设备: ' + (bleDevice.name || '未知设备'));
+
+    bleDevice.addEventListener('gattserverdisconnected', onDisconnected);
+
+    setStatus('connecting', '正在连接...');
+    log('正在建立 GATT 连接...');
+
+    const server = await bleDevice.gatt.connect();
+    isConnected = true;
+    updateConnectButton(true);
+    setStatus('connected', '已连接');
+    log('GATT 连接成功', 'success');
+
+    // 显示设备信息
+    document.getElementById('deviceInfoCard').style.display = 'block';
+    document.getElementById('deviceName').textContent = bleDevice.name || '未知';
+    document.getElementById('deviceId').textContent = bleDevice.id;
+
+    // 获取服务
+    const charUuid = document.getElementById('charUuid').value.trim();
+    
+    try {
+      const service = await server.getPrimaryService(serviceUuid || 'health_thermometer');
+      tempCharacteristic = await service.getCharacteristic(charUuid || 'temperature_measurement');
+      
+      const notifyType = document.getElementById('notifyType').value;
+      log(`开启 ${notifyType === 'indicate' ? 'Indicate' : 'Notify'}...`);
+      
+      await tempCharacteristic.startNotifications();
+      tempCharacteristic.addEventListener('characteristicvaluechanged', onTemperatureData);
+      log('温度通知已开启，等待数据...', 'success');
+    } catch (e) {
+      log('获取温度特征失败: ' + e.message, 'error');
+    }
+
+    // 尝试读取电池电量
+    try {
+      const batteryService = await server.getPrimaryService('battery_service');
+      batteryCharacteristic = await batteryService.getCharacteristic('battery_level');
+      const batteryValue = await batteryCharacteristic.readValue();
+      const level = batteryValue.getUint8(0);
+      document.getElementById('batteryLevel').textContent = level + '%';
+      log('电池电量: ' + level + '%', 'success');
+
+      // 监听电池变化
+      try {
+        await batteryCharacteristic.startNotifications();
+        batteryCharacteristic.addEventListener('characteristicvaluechanged', (event) => {
+          const level = event.target.value.getUint8(0);
+          document.getElementById('batteryLevel').textContent = level + '%';
+          log('电池电量更新: ' + level + '%');
+        });
+      } catch (e) {}
+    } catch (e) {
+      log('未找到电池服务: ' + e.message, 'warn');
+    }
+
+    // 尝试读取温度类型
+    try {
+      const service = await server.getPrimaryService(serviceUuid || 'health_thermometer');
+      const typeChar = await service.getCharacteristic('temperature_type');
+      const typeValue = await typeChar.readValue();
+      const typeCode = typeValue.getUint8(0);
+      const typeName = tempTypeMap[typeCode] || '未知 (' + typeCode + ')';
+      document.getElementById('tempType').textContent = typeName;
+      log('温度测量部位: ' + typeName, 'success');
+    } catch (e) {
+      log('未找到温度类型特征', 'warn');
+    }
+
+  } catch (error) {
+    log('连接失败: ' + error.message, 'error');
+    setStatus('disconnected', '连接失败');
+    updateConnectButton(false);
+    if (error.name !== 'NotFoundError') {
+      alert('连接失败：' + error.message);
+    }
+  }
+}
+
+function onTemperatureData(event) {
+  const value = event.target.value;
+  
+  // 打印原始数据（调试用）
+  let hex = '';
+  for (let i = 0; i < value.byteLength; i++) {
+    hex += ('0' + value.getUint8(i).toString(16)).slice(-2) + ' ';
+  }
+  log('收到数据 (' + value.byteLength + '字节): ' + hex.trim());
+
+  const result = parseTemperature(value);
+  
+  if (result.temp > 0 && result.temp < 100) {
+    updateTemperatureDisplay(result.temp, result.unit);
+    if (result.type) {
+      document.getElementById('tempType').textContent = result.type;
+    }
+    log(`温度: ${result.temp.toFixed(1)} ${result.unit}`, 'success');
+  } else {
+    log(`温度值异常: ${result.temp}`, 'warn');
+  }
+}
+
+function onDisconnected(event) {
+  isConnected = false;
+  tempCharacteristic = null;
+  batteryCharacteristic = null;
+  updateConnectButton(false);
+  setStatus('disconnected', '已断开');
+  log('设备已断开连接', 'warn');
+
+  // 自动重连
+  autoReconnect = document.getElementById('autoReconnect').checked;
+  if (autoReconnect && bleDevice) {
+    log('3秒后尝试自动重连...');
+    reconnectTimer = setTimeout(() => {
+      if (bleDevice && !isConnected) {
+        log('正在自动重连...');
+        reconnect();
+      }
+    }, 3000);
+  }
+}
+
+async function reconnect() {
+  if (!bleDevice) return;
+  try {
+    setStatus('connecting', '正在重连...');
+    const server = await bleDevice.gatt.connect();
+    isConnected = true;
+    updateConnectButton(true);
+    setStatus('connected', '已连接');
+    log('自动重连成功', 'success');
+
+    // 重新获取特征
+    const serviceUuid = document.getElementById('serviceUuid').value.trim() || 'health_thermometer';
+    const charUuid = document.getElementById('charUuid').value.trim() || 'temperature_measurement';
+    
+    const service = await server.getPrimaryService(serviceUuid);
+    tempCharacteristic = await service.getCharacteristic(charUuid);
+    await tempCharacteristic.startNotifications();
+    tempCharacteristic.addEventListener('characteristicvaluechanged', onTemperatureData);
+    log('温度通知已恢复', 'success');
+  } catch (e) {
+    log('自动重连失败: ' + e.message, 'error');
+    if (autoReconnect) {
+      reconnectTimer = setTimeout(reconnect, 5000);
+    }
+  }
+}
+
+function disconnectDevice() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+  if (bleDevice && bleDevice.gatt.connected) {
+    bleDevice.gatt.disconnect();
+    log('手动断开连接');
+  }
+}
+
+// ========== UI 交互 ==========
+function toggleSettings() {
+  const panel = document.getElementById('settingsPanel');
+  const icon = document.getElementById('settingsToggleIcon');
+  panel.classList.toggle('closed');
+  icon.classList.toggle('open');
+}
+
+function toggleLog() {
+  const panel = document.getElementById('logPanel');
+  const icon = document.getElementById('logToggleIcon');
+  panel.classList.toggle('closed');
+  icon.classList.toggle('open');
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('modeStandard').classList.toggle('active', mode === 'standard');
+  document.getElementById('modeCustom').classList.toggle('active', mode === 'custom');
+  
+  if (mode === 'standard') {
+    document.getElementById('serviceUuid').value = 'health_thermometer';
+    document.getElementById('charUuid').value = 'temperature_measurement';
+    document.getElementById('dataFormat').value = 'ieee11073';
+    document.getElementById('notifyType').value = 'indicate';
+  }
+}
+
+// ========== 初始化 ==========
+window.addEventListener('load', () => {
+  loadHistory();
+  
+  // 检测浏览器支持
+  if (!navigator.bluetooth) {
+    setStatus('disconnected', '浏览器不支持蓝牙');
+    log('警告：当前浏览器不支持 Web Bluetooth API', 'warn');
+    log('iOS 用户请使用 Bluefy 浏览器', 'warn');
+    log('安卓/桌面用户请使用 Chrome 浏览器', 'warn');
+  } else {
+    log('Web Bluetooth API 可用', 'success');
+  }
+
+  // 加载保存的设置
+  try {
+    const settings = localStorage.getItem('thermometer_settings');
+    if (settings) {
+      const s = JSON.parse(settings);
+      if (s.serviceUuid) document.getElementById('serviceUuid').value = s.serviceUuid;
+      if (s.charUuid) document.getElementById('charUuid').value = s.charUuid;
+      if (s.dataFormat) document.getElementById('dataFormat').value = s.dataFormat;
+      if (s.notifyType) document.getElementById('notifyType').value = s.notifyType;
+      if (s.autoReconnect !== undefined) document.getElementById('autoReconnect').checked = s.autoReconnect;
+    }
+  } catch (e) {}
+
+  // 保存设置变更
+  ['serviceUuid', 'charUuid', 'dataFormat', 'notifyType', 'autoReconnect'].forEach(id => {
+    document.getElementById(id).addEventListener('change', saveSettings);
+  });
+
+  // 注册 Service Worker (PWA 离线缓存)
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js')
+        .then((registration) => {
+          log('PWA 离线缓存已启用', 'success');
+          // 监听更新
+          registration.addEventListener('updatefound', () => {
+            log('发现新版本，正在更新...', 'info');
+            const newWorker = registration.installing;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                log('新版本已就绪，刷新页面即可生效', 'success');
+                if (confirm('发现新版本，是否立即刷新？')) {
+                  window.location.reload();
+                }
+              }
+            });
+          });
+        })
+        .catch((error) => {
+          log('PWA 注册失败: ' + error.message, 'warn');
+        });
+    });
+  }
+
+  // 监听在线/离线状态
+  window.addEventListener('online', () => {
+    log('网络已恢复', 'success');
+  });
+  window.addEventListener('offline', () => {
+    log('当前处于离线模式（数据仍可正常使用）', 'warn');
+  });
+});
+
+function saveSettings() {
+  try {
+    const settings = {
+      serviceUuid: document.getElementById('serviceUuid').value,
+      charUuid: document.getElementById('charUuid').value,
+      dataFormat: document.getElementById('dataFormat').value,
+      notifyType: document.getElementById('notifyType').value,
+      autoReconnect: document.getElementById('autoReconnect').checked
+    };
+    localStorage.setItem('thermometer_settings', JSON.stringify(settings));
+  } catch (e) {}
+}
+</script>
+</body>
+</html>
